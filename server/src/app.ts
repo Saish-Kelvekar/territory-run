@@ -1,7 +1,9 @@
 import cors from "cors";
-import express, { type ErrorRequestHandler } from "express";
+import express from "express";
 import helmet from "helmet";
 import { pool } from "./db/pool.js";
+import { errorHandler } from "./middleware/errorHandler.js";
+import { authRouter } from "./routes/auth.routes.js";
 
 export const app = express();
 
@@ -19,9 +21,6 @@ app.get("/health", async (_request, response) => {
   }
 });
 
-const errorHandler: ErrorRequestHandler = (error, _request, response, _next) => {
-  console.error("Unhandled request error:", error);
-  response.status(500).json({ message: "Internal server error", code: "INTERNAL_ERROR" });
-};
+app.use("/auth", authRouter);
 
 app.use(errorHandler);
