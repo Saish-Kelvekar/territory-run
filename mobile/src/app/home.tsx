@@ -1,4 +1,4 @@
-import { Redirect } from "expo-router";
+import { Redirect, router } from "expo-router";
 import { useState } from "react";
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-native";
 import { useAuth } from "../context/AuthContext";
@@ -24,6 +24,9 @@ export default function Home(): React.JSX.Element {
     <View style={styles.container}>
       <Text style={styles.title}>Welcome, {user.username}</Text>
       <Text>Email: {user.email}</Text>
+      <Pressable onPress={() => router.push("/permission-needed")} style={styles.secondaryButton}>
+        <Text>Check location permission</Text>
+      </Pressable>
       <Pressable disabled={isLoggingOut} onPress={() => void signOut()} style={styles.button}>
         {isLoggingOut ? <ActivityIndicator color="#fff" /> : <Text style={styles.buttonText}>Log out</Text>}
       </Pressable>
@@ -36,5 +39,6 @@ const styles = StyleSheet.create({
   buttonText: { color: "#fff", fontWeight: "600" },
   container: { flex: 1, justifyContent: "center", padding: 24, gap: 12 },
   loader: { flex: 1 },
+  secondaryButton: { alignItems: "center", borderColor: "#cbd5e1", borderRadius: 8, borderWidth: 1, padding: 14 },
   title: { fontSize: 26, fontWeight: "700" },
 });
