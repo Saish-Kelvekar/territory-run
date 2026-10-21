@@ -24,6 +24,9 @@ export default function Home(): React.JSX.Element {
     <View style={styles.container}>
       <Text style={styles.title}>Welcome, {user.username}</Text>
       <Text>Email: {user.email}</Text>
+      <Pressable onPress={() => router.push("/run")} style={styles.runButton}>
+        <Text style={styles.buttonText}>Open run map</Text>
+      </Pressable>
       <Pressable onPress={() => router.push("/permission-needed")} style={styles.secondaryButton}>
         <Text>Check location permission</Text>
       </Pressable>
@@ -39,6 +42,7 @@ const styles = StyleSheet.create({
   buttonText: { color: "#fff", fontWeight: "600" },
   container: { flex: 1, justifyContent: "center", padding: 24, gap: 12 },
   loader: { flex: 1 },
+  runButton: { alignItems: "center", backgroundColor: "#2563eb", borderRadius: 8, padding: 14 },
   secondaryButton: { alignItems: "center", borderColor: "#cbd5e1", borderRadius: 8, borderWidth: 1, padding: 14 },
   title: { fontSize: 26, fontWeight: "700" },
 });
