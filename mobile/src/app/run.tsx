@@ -1,15 +1,41 @@
-import { Camera, Map, Marker } from "@maplibre/maplibre-react-native";
+import {
+  Camera,
+  GeoJSONSource,
+  Layer,
+  Map,
+  Marker,
+} from "@maplibre/maplibre-react-native";
 import * as Linking from "expo-linking";
 import { Redirect, router } from "expo-router";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-native";
 import { MAP_STYLE_URL } from "../constants/map";
 import { useAuth } from "../context/AuthContext";
 import { useLiveLocation } from "../hooks/useLiveLocation";
 import { useLocationPermission } from "../hooks/useLocationPermission";
+import { LOOP_CLOSURE_THRESHOLD_METRES, useRunTracker } from "../hooks/useRunTracker";
+import { buildRouteLineString } from "../utils/geo";
 
 const formatAccuracy = (accuracy: number | null): string =>
   accuracy === null ? "Unknown" : `${Math.round(accuracy)} m`;
+
+const formatDuration = (elapsedMs: number): string => {
+  const totalSeconds = Math.max(0, Math.floor(elapsedMs / 1000));
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+  const paddedMinutes = String(minutes).padStart(2, "0");
+  const paddedSeconds = String(seconds).padStart(2, "0");
+
+  return hours > 0
+    ? `${String(hours).padStart(2, "0")}:${paddedMinutes}:${paddedSeconds}`
+    : `${paddedMinutes}:${paddedSeconds}`;
+};
+
+const formatDistance = (distanceMetres: number): string =>
+  distanceMetres >= 1000
+    ? `${(distanceMetres / 1000).toFixed(2)} km`
+    : `${Math.round(distanceMetres)} m`;
 
 export default function Run(): React.JSX.Element {
   const { isLoading: isAuthLoading, isAuthenticated } = useAuth();
@@ -26,6 +52,27 @@ export default function Run(): React.JSX.Element {
     status: liveStatus,
     retry: retryLocation,
   } = useLiveLocation({ enabled: isAuthenticated && canUseLocation });
+  const {
+    status: runStatus,
+    routeSegments,
+    distanceMetres,
+    elapsedMs,
+    loopDistanceMetres,
+    loopResult,
+    start,
+    pause,
+    resume,
+    finish,
+  } = useRunTracker({ acceptedPoints });
+  const routeLines = useMemo(
+    () =>
+      routeSegments.flatMap((segment, index) => {
+        const data = buildRouteLineString(segment);
+
+        return data ? [{ id: `run-route-${index}`, data }] : [];
+      }),
+    [routeSegments],
+  );
 
   const retryMap = (): void => {
     setHasMapError(false);
@@ -61,6 +108,29 @@ export default function Run(): React.JSX.Element {
       liveStatus !== "services-disabled" &&
       liveStatus !== "error");
 
+  const isNearStart =
+    loopDistanceMetres !== null && loopDistanceMetres <= LOOP_CLOSURE_THRESHOLD_METRES;
+  const loopValue =
+    runStatus === "finished"
+      ? loopResult === "closed"
+        ? "Closed"
+        : loopResult === "open"
+          ? "Open"
+          : "Unknown"
+      : "—";
+  const loopHint =
+    runStatus === "finished"
+      ? loopResult === "unavailable"
+        ? "Missing location"
+        : "Checked at finish"
+      : runStatus === "idle"
+        ? "Not started"
+        : isNearStart
+          ? "Near start"
+          : loopDistanceMetres !== null
+            ? `${Math.round(loopDistanceMetres)} m to start`
+            : "Waiting for GPS";
+
   return (
     <View style={styles.container}>
       <Map
@@ -75,6 +145,16 @@ export default function Run(): React.JSX.Element {
           setHasMapError(true);
         }}
       >
+        {routeLines.map((routeLine) => (
+          <GeoJSONSource key={routeLine.id} id={routeLine.id} data={routeLine.data}>
+            <Layer
+              id={`${routeLine.id}-line`}
+              type="line"
+              layout={{ "line-cap": "round", "line-join": "round" }}
+              paint={{ "line-color": "#2563eb", "line-width": 5, "line-opacity": 0.9 }}
+            />
+          </GeoJSONSource>
+        ))}
         {latestPoint ? (
           <>
             <Camera center={[latestPoint.longitude, latestPoint.latitude]} zoom={16} />
@@ -166,19 +246,72 @@ export default function Run(): React.JSX.Element {
         </View>
       ) : null}
 
-      {!hasMapError && liveStatus !== "error" && liveStatus !== "services-disabled" && latestPoint ? (
-        <View pointerEvents="none" style={styles.liveStats}>
-          <View style={styles.stat}>
-            <Text style={styles.statLabel}>Accuracy</Text>
-            <Text style={styles.statValue}>{formatAccuracy(latestPoint.accuracy)}</Text>
+      {!hasMapError && !isLocationLoading && liveStatus !== "error" && liveStatus !== "services-disabled" ? (
+        <View style={styles.runPanel}>
+          <View style={styles.runStats}>
+            <View style={styles.stat}>
+              <Text style={styles.statLabel}>Time</Text>
+              <Text style={styles.statValue}>{formatDuration(elapsedMs)}</Text>
+            </View>
+            <View style={styles.stat}>
+              <Text style={styles.statLabel}>Distance</Text>
+              <Text style={styles.statValue}>{formatDistance(distanceMetres)}</Text>
+            </View>
+            <View style={styles.stat}>
+              <Text style={styles.statLabel}>Loop</Text>
+              <Text
+                style={[
+                  styles.statValue,
+                  runStatus === "finished" && loopResult === "closed" ? styles.loopClosed : null,
+                ]}
+              >
+                {loopValue}
+              </Text>
+              <Text style={styles.statHint}>{loopHint}</Text>
+            </View>
           </View>
-          <View style={styles.stat}>
-            <Text style={styles.statLabel}>Accepted</Text>
-            <Text style={styles.statValue}>{acceptedPoints.length}</Text>
-          </View>
-          <View style={styles.stat}>
-            <Text style={styles.statLabel}>Raw</Text>
-            <Text style={styles.statValue}>{rawReadings.length}</Text>
+
+          {latestPoint ? (
+            <Text style={styles.gpsMeta}>
+              GPS {formatAccuracy(latestPoint.accuracy)} · {acceptedPoints.length} accepted ·{" "}
+              {rawReadings.length} raw
+            </Text>
+          ) : null}
+
+          <View style={styles.runControls}>
+            {runStatus === "idle" ? (
+              <Pressable onPress={start} style={styles.primaryButton}>
+                <Text style={styles.primaryButtonText}>Start run</Text>
+              </Pressable>
+            ) : null}
+
+            {runStatus === "running" ? (
+              <>
+                <Pressable onPress={pause} style={styles.secondaryButton}>
+                  <Text style={styles.secondaryButtonText}>Pause</Text>
+                </Pressable>
+                <Pressable onPress={finish} style={styles.dangerButton}>
+                  <Text style={styles.dangerButtonText}>Finish</Text>
+                </Pressable>
+              </>
+            ) : null}
+
+            {runStatus === "paused" ? (
+              <>
+                <Pressable onPress={resume} style={styles.primaryButton}>
+                  <Text style={styles.primaryButtonText}>Resume</Text>
+                </Pressable>
+                <Pressable onPress={finish} style={styles.dangerButton}>
+                  <Text style={styles.dangerButtonText}>Finish</Text>
+                </Pressable>
+              </>
+            ) : null}
+
+            {runStatus === "finished" ? (
+              <Pressable onPress={start} style={styles.primaryButton}>
+                <Text style={styles.primaryButtonText}>Start new run</Text>
+              </Pressable>
+            ) : null}
           </View>
         </View>
       ) : null}
@@ -273,17 +406,24 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: "600",
   },
-  liveStats: {
-    backgroundColor: "rgba(255, 255, 255, 0.95)",
-    borderRadius: 10,
-    bottom: 62,
-    elevation: 2,
-    flexDirection: "row",
-    left: 16,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    position: "absolute",
-    right: 16,
+  dangerButton: {
+    alignItems: "center",
+    backgroundColor: "#dc2626",
+    borderRadius: 8,
+    flex: 1,
+    padding: 14,
+  },
+  dangerButtonText: {
+    color: "#fff",
+    fontWeight: "600",
+  },
+  gpsMeta: {
+    color: "#64748b",
+    fontSize: 12,
+    textAlign: "center",
+  },
+  loopClosed: {
+    color: "#15803d",
   },
   marker: {
     backgroundColor: "#2563eb",
@@ -327,10 +467,33 @@ const styles = StyleSheet.create({
     color: "#334155",
     fontWeight: "600",
   },
+  runControls: {
+    flexDirection: "row",
+    gap: 12,
+  },
+  runPanel: {
+    backgroundColor: "rgba(255, 255, 255, 0.97)",
+    borderRadius: 12,
+    bottom: 62,
+    elevation: 4,
+    gap: 10,
+    left: 16,
+    padding: 14,
+    position: "absolute",
+    right: 16,
+  },
+  runStats: {
+    flexDirection: "row",
+  },
   stat: {
     alignItems: "center",
     flex: 1,
     gap: 2,
+  },
+  statHint: {
+    color: "#94a3b8",
+    fontSize: 10,
+    fontWeight: "600",
   },
   statLabel: {
     color: "#64748b",
