@@ -1,7 +1,7 @@
 {
   "expo": {
-    "name": "mobile",
-    "slug": "mobile",
+    "name": "Territory Run",
+    "slug": "territory-run",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -10,6 +10,7 @@
       "supportsTablet": true
     },
     "android": {
+      "package": "com.saishkelvekar.territoryrun",
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/android-icon-foreground.png",
@@ -23,7 +24,15 @@
     },
     "plugins": [
       "expo-secure-store",
-      "expo-router"
-    ]
+      "expo-router",
+      "@maplibre/maplibre-react-native"
+    ],
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "74163758-b98b-40ff-a33d-c2078bad1cfc"
+      }
+    },
+    "owner": "saishkelvekars-team"
   }
 }
