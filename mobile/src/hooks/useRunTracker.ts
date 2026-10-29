@@ -53,6 +53,7 @@ export type UseRunTrackerResult = RunState & {
 
 export const LOOP_CLOSURE_THRESHOLD_METRES = 40;
 
+
 const toGeoPoint = (point: LiveLocationPoint): GeoPoint => ({
   latitude: point.latitude,
   longitude: point.longitude,
