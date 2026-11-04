@@ -4,6 +4,7 @@ import helmet from "helmet";
 import { pool } from "./db/pool.js";
 import { errorHandler } from "./middleware/errorHandler.js";
 import { authRouter } from "./routes/auth.routes.js";
+import { spikeRouter } from "./routes/spike.routes.js";
 
 export const app = express();
 
@@ -22,5 +23,6 @@ app.get("/health", async (_request, response) => {
 });
 
 app.use("/auth", authRouter);
+app.use("/spike", spikeRouter);
 
 app.use(errorHandler);
